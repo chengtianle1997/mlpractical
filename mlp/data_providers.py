@@ -133,11 +133,11 @@ class MNISTDataProvider(DataProvider):
         super(MNISTDataProvider, self).__init__(
             inputs, targets, batch_size, max_num_batches, shuffle_order, rng)
 
-    # def next(self):
-    #    """Returns next data batch or raises `StopIteration` if at end."""
-    #    inputs_batch, targets_batch = super(MNISTDataProvider, self).next()
-    #    return inputs_batch, self.to_one_of_k(targets_batch)
-    #
+    def next(self):
+       """Returns next data batch or raises `StopIteration` if at end."""
+       inputs_batch, targets_batch = super(MNISTDataProvider, self).next()
+       return inputs_batch, self.to_one_of_k(targets_batch)
+    
     def __next__(self):
         return self.next()
 
@@ -156,7 +156,11 @@ class MNISTDataProvider(DataProvider):
             to zero except for the column corresponding to the correct class
             which is equal to one.
         """
-        raise NotImplementedError()
+        ret_arr = np.ndarray((int_targets.size, 10))
+        for n in range(0, int_targets.size):
+            ret_arr[n] = np.zeros(10)
+            ret_arr[n][int_targets[n] - 1] = 1
+        return ret_arr
 
 
 class MetOfficeDataProvider(DataProvider):
@@ -188,19 +192,41 @@ class MetOfficeDataProvider(DataProvider):
             'Data file does not exist at expected path: ' + data_path
         )
         # load raw data from text file
-        # ...
+        '''
+        file = open(data_path)
+        val_list = file.readlines()
+        values = np.array([])
+        for n in range(3, len(val_list)):
+            np.append(values, val_list[n].split()[2:])
+        values = values.astype(np.float32)
+        '''
+        values = np.loadtxt(data_path, skiprows=3)
         # filter out all missing datapoints and flatten to a vector
-        # ...
+        # delete the year and month
+        valid_values = values[:, 2:values.shape[1]].astype(np.float32)
+        # flatten to vector
+        vector = valid_values.flatten()
+        # filter missing datapoints
+        valid_index = vector > -99.9
+        data = vector[valid_index]
         # normalise data to zero mean, unit standard deviation
-        # ...
+        data_mean = np.mean(data)
+        data_sigma = np.var(data)
+        data = (data - data_mean) / data_sigma**2
         # convert from flat sequence to windowed data
-        # ...
+        data = data[0 : int(data.size / window_size) * window_size]
+        windowed_data = data.reshape((-1, window_size))
         # inputs are first (window_size - 1) entries in windows
-        # inputs = ...
+        inputs = windowed_data[:, 0 : window_size - 1] 
         # targets are last entry in windows
-        # targets = ...
+        targets = windowed_data[:, window_size - 1]
         # initialise base class with inputs and targets arrays
-        # super(MetOfficeDataProvider, self).__init__(
-        #     inputs, targets, batch_size, max_num_batches, shuffle_order, rng)
+        super(MetOfficeDataProvider, self).__init__(
+            inputs, targets, batch_size, max_num_batches, shuffle_order, rng)
     def __next__(self):
             return self.next()
+
+
+met_dp = MetOfficeDataProvider(
+        window_size=10, batch_size=3,
+        max_num_batches=1, shuffle_order=False)
