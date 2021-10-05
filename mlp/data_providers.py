@@ -75,6 +75,9 @@ class DataProvider(object):
         self.inputs = self.inputs[new_order]
         self.targets = self.targets[new_order]
 
+    def __next__(self):
+        return self.next()
+
     def next(self):
         """Returns next data batch or raises `StopIteration` if at end."""
         if self._curr_batch + 1 > self.num_batches:
@@ -134,12 +137,9 @@ class MNISTDataProvider(DataProvider):
             inputs, targets, batch_size, max_num_batches, shuffle_order, rng)
 
     def next(self):
-       """Returns next data batch or raises `StopIteration` if at end."""
-       inputs_batch, targets_batch = super(MNISTDataProvider, self).next()
-       return inputs_batch, self.to_one_of_k(targets_batch)
-    
-    def __next__(self):
-        return self.next()
+        """Returns next data batch or raises `StopIteration` if at end."""
+        inputs_batch, targets_batch = super(MNISTDataProvider, self).next()
+        return inputs_batch, self.to_one_of_k(targets_batch)
 
     def to_one_of_k(self, int_targets):
         """Converts integer coded class target to 1 of K coded targets.
@@ -156,11 +156,9 @@ class MNISTDataProvider(DataProvider):
             to zero except for the column corresponding to the correct class
             which is equal to one.
         """
-        ret_arr = np.ndarray((int_targets.size, 10))
-        for n in range(0, int_targets.size):
-            ret_arr[n] = np.zeros(10)
-            ret_arr[n][int_targets[n] - 1] = 1
-        return ret_arr
+        one_of_k_targets = np.zeros((int_targets.shape[0], self.num_classes))
+        one_of_k_targets[range(int_targets.shape[0]), int_targets] = 1
+        return one_of_k_targets
 
 
 class MetOfficeDataProvider(DataProvider):
@@ -168,7 +166,7 @@ class MetOfficeDataProvider(DataProvider):
 
     def __init__(self, window_size, batch_size=10, max_num_batches=-1,
                  shuffle_order=True, rng=None):
-        """Create a new Met Offfice data provider object.
+        """Create a new Met Office data provider object.
 
         Args:
             window_size (int): Size of windows to split weather time series
@@ -184,49 +182,74 @@ class MetOfficeDataProvider(DataProvider):
                 the data before each epoch.
             rng (RandomState): A seeded random number generator.
         """
-        self.window_size = window_size
-        assert window_size > 1, 'window_size must be at least 2.'
         data_path = os.path.join(
             os.environ['MLP_DATA_DIR'], 'HadSSP_daily_qc.txt')
         assert os.path.isfile(data_path), (
             'Data file does not exist at expected path: ' + data_path
         )
-        # load raw data from text file
-        '''
-        file = open(data_path)
-        val_list = file.readlines()
-        values = np.array([])
-        for n in range(3, len(val_list)):
-            np.append(values, val_list[n].split()[2:])
-        values = values.astype(np.float32)
-        '''
-        values = np.loadtxt(data_path, skiprows=3)
+        raw = np.loadtxt(data_path, skiprows=3, usecols=range(2, 32))
+        assert window_size > 1, 'window_size must be at least 2.'
+        self.window_size = window_size
         # filter out all missing datapoints and flatten to a vector
-        # delete the year and month
-        valid_values = values[:, 2:values.shape[1]].astype(np.float32)
-        # flatten to vector
-        vector = valid_values.flatten()
-        # filter missing datapoints
-        valid_index = vector > -99.9
-        data = vector[valid_index]
+        filtered = raw[raw >= 0].flatten()
         # normalise data to zero mean, unit standard deviation
-        data_mean = np.mean(data)
-        data_sigma = np.var(data)
-        data = (data - data_mean) / data_sigma**2
-        # convert from flat sequence to windowed data
-        data = data[0 : int(data.size / window_size) * window_size]
-        windowed_data = data.reshape((-1, window_size))
+        mean = np.mean(filtered)
+        std = np.std(filtered)
+        normalised = (filtered - mean) / std
+        # create a view on to array corresponding to a rolling window
+        shape = (normalised.shape[-1] - self.window_size + 1, self.window_size)
+        strides = normalised.strides + (normalised.strides[-1],)
+        windowed = np.lib.stride_tricks.as_strided(
+            normalised, shape=shape, strides=strides)
         # inputs are first (window_size - 1) entries in windows
-        inputs = windowed_data[:, 0 : window_size - 1] 
+        inputs = windowed[:, :-1]
         # targets are last entry in windows
-        targets = windowed_data[:, window_size - 1]
-        # initialise base class with inputs and targets arrays
+        targets = windowed[:, -1]
         super(MetOfficeDataProvider, self).__init__(
             inputs, targets, batch_size, max_num_batches, shuffle_order, rng)
-    def __next__(self):
-            return self.next()
 
+class CCPPDataProvider(DataProvider):
 
-met_dp = MetOfficeDataProvider(
-        window_size=10, batch_size=3,
-        max_num_batches=1, shuffle_order=False)
+    def __init__(self, which_set='train', input_dims=None, batch_size=10,
+                 max_num_batches=-1, shuffle_order=True, rng=None):
+        """Create a new Combined Cycle Power Plant data provider object.
+
+        Args:
+            which_set: One of 'train' or 'valid'. Determines which portion of
+                data this object should provide.
+            input_dims: Which of the four input dimension to use. If `None` all
+                are used. If an iterable of integers are provided (consisting
+                of a subset of {0, 1, 2, 3}) then only the corresponding
+                input dimensions are included.
+            batch_size (int): Number of data points to include in each batch.
+            max_num_batches (int): Maximum number of batches to iterate over
+                in an epoch. If `max_num_batches * batch_size > num_data` then
+                only as many batches as the data can be split into will be
+                used. If set to -1 all of the data will be used.
+            shuffle_order (bool): Whether to randomly permute the order of
+                the data before each epoch.
+            rng (RandomState): A seeded random number generator.
+        """
+        data_path = os.path.join(
+            os.environ['MLP_DATA_DIR'], 'ccpp_data.npz')
+        assert os.path.isfile(data_path), (
+            'Data file does not exist at expected path: ' + data_path
+        )
+        # check a valid which_set was provided
+        assert which_set in ['train', 'valid'], (
+            'Expected which_set to be either train or valid '
+            'Got {0}'.format(which_set)
+        )
+        # check input_dims are valid
+        if not input_dims is not None:
+            input_dims = set(input_dims)
+            assert input_dims.issubset({0, 1, 2, 3}), (
+                'input_dims should be a subset of {0, 1, 2, 3}'
+            )
+        loaded = np.load(data_path)
+        inputs = loaded[which_set + '_inputs']
+        if input_dims is not None:
+            inputs = inputs[:, input_dims]
+        targets = loaded[which_set + '_targets']
+        super(CCPPDataProvider, self).__init__(
+            inputs, targets, batch_size, max_num_batches, shuffle_order, rng)
