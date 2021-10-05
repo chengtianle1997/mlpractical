@@ -437,7 +437,15 @@ Make sure we are on the first lab branch
 
 ```
 cd ~/mlpractical
+<<<<<<< HEAD
 git checkout mlp2020-21/lab1
+=======
+<<<<<<< HEAD
+git checkout mlp2021-22/lab1
+=======
+git checkout mlp2020-21/lab1
+>>>>>>> e9657e46f5053516ab27b9fa765301fa680413f7
+>>>>>>> c889c6dd8e8c6e8ec9087b6dd8e9ad56b55e1b3b
 ```
 
 Install the `mlp` package in the environment in develop mode
