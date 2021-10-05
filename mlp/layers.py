@@ -28,8 +28,12 @@ class Layer(object):
         Returns:
             outputs: Array of layer outputs of shape (batch_size, output_dim).
         """
+<<<<<<< HEAD
         y = np.dot(inputs, self.weights.T) + self.biases
         return y
+=======
+        raise NotImplementedError()
+>>>>>>> e9657e46f5053516ab27b9fa765301fa680413f7
 
     def bprop(self, inputs, outputs, grads_wrt_outputs):
         """Back propagates gradients through a layer.
@@ -48,7 +52,10 @@ class Layer(object):
             Array of gradients with respect to the layer inputs of shape
             (batch_size, input_dim).
         """
+<<<<<<< HEAD
 
+=======
+>>>>>>> e9657e46f5053516ab27b9fa765301fa680413f7
         raise NotImplementedError()
 
 
@@ -68,10 +75,14 @@ class LayerWithParameters(Layer):
             with parameter gradients appearing in same order in tuple as
             returned from `get_params` method.
         """
+<<<<<<< HEAD
         grads_wrt_weights = np.dot(grads_wrt_outputs.T, inputs)
         grads_wrt_biases = np.sum(grads_wrt_outputs.T, axis=1)
         return grads_wrt_weights, grads_wrt_biases
         
+=======
+        raise NotImplementedError()
+>>>>>>> e9657e46f5053516ab27b9fa765301fa680413f7
 
     @property
     def params(self):
@@ -118,8 +129,12 @@ class AffineLayer(LayerWithParameters):
         Returns:
             outputs: Array of layer outputs of shape (batch_size, output_dim).
         """
+<<<<<<< HEAD
         y = np.dot(inputs, self.weights.T) + self.biases
         return y
+=======
+        raise NotImplementedError()
+>>>>>>> e9657e46f5053516ab27b9fa765301fa680413f7
 
     def grads_wrt_params(self, inputs, grads_wrt_outputs):
         """Calculates gradients with respect to layer parameters.
@@ -133,9 +148,13 @@ class AffineLayer(LayerWithParameters):
             list of arrays of gradients with respect to the layer parameters
             `[grads_wrt_weights, grads_wrt_biases]`.
         """
+<<<<<<< HEAD
         grads_wrt_weights = np.dot(grads_wrt_outputs.T, inputs)
         grads_wrt_biases = np.sum(grads_wrt_outputs.T, axis=1)
         return grads_wrt_weights, grads_wrt_biases
+=======
+        raise NotImplementedError()
+>>>>>>> e9657e46f5053516ab27b9fa765301fa680413f7
 
     @property
     def params(self):
